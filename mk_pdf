@@ -160,13 +160,9 @@ def main():
         pdf = dir.name + "/" + str(count) + ".pdf"
         pdfs.append(pdf)
         presentation.write(svg)
-        cmds.append(
-                "inkscape --export-filename=\"" +
-                pdf +
-                "\" \"" +
-                svg +
-                "\" 2> /dev/null"
-                )
+        cmds.append(["/usr/bin/inkscape",
+                     "-o", pdf,
+                     svg])
         count += 1
         if args.verbose:
             print("\rSplitting slides: {}/{}".format(count, total), end="")
@@ -178,12 +174,12 @@ def main():
     count = 0
     while cmds:
         if len(procs) <= args.threads:
-            procs.append(subprocess.Popen(cmds.pop(), shell=True))
+            procs.append(subprocess.Popen(cmds.pop()))
             continue
 
         for num, proc in enumerate(procs):
             if proc.poll() is not None:
-                procs[num] = subprocess.Popen(cmds.pop(), shell=True)
+                procs[num] = subprocess.Popen(cmds.pop())
                 count += 1
 
                 if args.verbose:
@@ -204,14 +200,17 @@ def main():
     if args.verbose:
         print("\nMerging slides... ", end="")
 
-    cmd = "gs -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite -sOutputFile=\"" +\
-          args.output +\
-          "\" "
+    cmd = ['/usr/bin/gs',
+           '-dBATCH',
+           '-dNOPAUSE',
+           '-q',
+           '-sDEVICE=pdfwrite',
+           '-sOutputFile=' + args.output]
 
     for pdf in pdfs:
-        cmd = cmd + " " + pdf
+        cmd.append(pdf)
 
-    subprocess.run(cmd, shell=True)
+    subprocess.run(cmd)
 
     if args.verbose:
         print("done!")
