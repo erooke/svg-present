@@ -1,10 +1,9 @@
 #! /bin/python
-import argparse
-import multiprocessing
-import subprocess
-import tempfile
-import time
-import xml.etree.ElementTree
+from argparse import ArgumentParser
+from multiprocessing import Pool
+from subprocess import run, DEVNULL
+from tempfile import TemporaryDirectory
+from xml.etree import ElementTree
 
 
 def main():
@@ -16,7 +15,7 @@ def main():
         2. Use inkscape to render each of these svgs to pdfs
         3. Combine each pdf into one master pdf
     """
-    parser = argparse.ArgumentParser(
+    parser = ArgumentParser(
             description='A python script to create slides using inkscape'
             )
 
@@ -43,7 +42,7 @@ def main():
             help='How many inkscape processess to spawn',
             nargs='?',
             type=int,
-            default=multiprocessing.cpu_count() - 1
+            default=None
             )
 
     args = parser.parse_args()
@@ -53,9 +52,7 @@ def main():
     for file in args.files:
         presentation.children.append(load_presentation(file))
 
-    dir = tempfile.TemporaryDirectory()
-
-    render_cmds = []
+    dir = TemporaryDirectory()
 
     merge_cmd = ['/usr/bin/gs',
                  '-dBATCH',
@@ -65,59 +62,38 @@ def main():
                  '-sOutputFile=' + args.output]
 
     count = 0
-    spinner = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
 
-    # Split the slides, compute the commands to render the slides
+    pool = Pool(args.threads)
+
+    # Split the slides, start the rendering pool
+    print("\r  Splitting Slides", end="")
     while next(presentation):
         svg = dir.name + "/" + str(count) + ".svg"
         pdf = dir.name + "/" + str(count) + ".pdf"
         merge_cmd.append(pdf)
         presentation.children[presentation.index].tree.write(svg)
-        render_cmds.append(["/usr/bin/inkscape",
-                            "-o", pdf,
-                            svg])
+        pool.apply_async(
+                run,
+                (["/usr/bin/inkscape", "-o", pdf, svg],),
+                dict(stderr=DEVNULL)
+                )
+        count += 1
+    print("\r✓ Splitting Slides")
 
-        count = (count + 1) % 10
-        print("\r{} Splitting slides".format(spinner[count]), end="")
-    print("\r✓ Splitting slides")
-
-    procs = [None] * args.threads
- 
-    # Run each of the render commands previously computed
-    while procs:
-        run(procs, render_cmds)
-        count = (count + 1) % 10
-        print("\r{} Rendering Pdfs".format(spinner[count]), end="")
-        time.sleep(0.03)
-    print("\r✓ Rendering Pdfs")
+    print("  Rendering Slides", end="")
+    pool.close()
+    pool.join()
+    print("\r✓ Rendering Slides")
 
     # Merge each of the pdfs into one pdf
-    merge = subprocess.Popen(merge_cmd)
-    while merge.poll() is None:
-        count = (count + 1) % 10
-        print("\r{} Merging slides".format(spinner[count]), end="")
-        time.sleep(0.03)
+    print("  Merging slides", end="")
+    run(merge_cmd)
     print("\r✓ Merging slides")
 
 
 def inkscape(name):
     """ Add the inkscape namespace to a name """
     return '{http://www.inkscape.org/namespaces/inkscape}' + name
-
-
-def run(procs, cmds):
-    """ Budget worker pool """
-    if not cmds:
-        for i, proc in enumerate(procs):
-            if proc is None or proc.poll() is not None:
-                _ = procs.pop(i)
-                return
-        return
-
-    for i, proc in enumerate(procs):
-        if proc is None or proc.poll() is not None:
-            procs[i] = subprocess.Popen(cmds.pop(), stderr=subprocess.DEVNULL)
-            break
 
 
 class Tree:
@@ -177,7 +153,7 @@ def layer(element):
 
 def load_presentation(file):
     """ Load a presentation from an svg file on disk """
-    tree = xml.etree.ElementTree.parse(file)
+    tree = ElementTree.parse(file)
     root = tree.getroot()
     slides = Tree()
     slides.tree = tree
