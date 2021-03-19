@@ -3,97 +3,19 @@ import argparse
 import multiprocessing
 import subprocess
 import tempfile
+import time
 import xml.etree.ElementTree
 
 
-def inkscape(name):
-    """ Add the inkscape namespace to a name """
-    return '{http://www.inkscape.org/namespaces/inkscape}' + name
-
-
-class Slides:
+def main():
     """
-    A rose tree representation of a slide show each
-    leaf corresponds to a slide, any parent is set
-    to visible if that leaf is visible.
+    Renders a pdf slideshow from a single svg.
+    This process happens in three steps:
+        0. Parse user input
+        1. Split the svg into one svg file per slide
+        2. Use inkscape to render each of these svgs to pdfs
+        3. Combine each pdf into one master pdf
     """
-    def __init__(self, element, tree=None):
-        self.tree = tree
-        self.element = None
-        self.index = -1
-        self.children = []
-
-        if element is None:
-            return
-
-        groupmode = element.get(inkscape('groupmode'))
-        if groupmode == 'layer':
-            self.element = element
-
-        for child in element:
-            groupmode = child.get(inkscape('groupmode'))
-
-            if groupmode != 'layer':
-                continue
-
-            label = child.get(inkscape('label'))
-
-            if label[0] == '(' and label[-1] == ')':
-                continue
-
-            slide = Slides(child)
-            slide.hide()
-            self.children.append(slide)
-
-    def write(self, file):
-        self.children[self.index].tree.write(file)
-
-    def visible(self):
-        """ Set the element to visible """
-        if self.element is not None:
-            self.element.set('style', 'display:inline')
-
-    def hide(self):
-        """ Set the element to invisible """
-        if self.element is not None:
-            self.element.set('style', 'display:none')
-
-    def next(self):
-        """ Move to the next slide """
-        if self.index == -1:
-            # Initial setup
-            self.index += 1
-            self.visible()
-
-            if self.children:
-                self.children[0].next()
-
-            return True
-
-        try:
-            if not self.children[self.index].next():
-                self.index += 1
-                self.children[self.index].next()
-
-        except IndexError:
-            # If at any point we run out of children there is no next element
-            self.hide()
-            return False
-
-        return True
-
-    def __len__(self):
-        """ How many slides are in the presentation """
-        if not self.children:
-            return 1
-        result = 0
-        for child in self.children:
-            result += len(child)
-        return result
-
-
-def get_args():
-    """ Get command line arguments """
     parser = argparse.ArgumentParser(
             description='A python script to create slides using inkscape'
             )
@@ -103,13 +25,6 @@ def get_args():
             metavar='file',
             nargs='+',
             help='Inkscape file to use'
-            )
-
-    parser.add_argument(
-            '-v',
-            '--verbose',
-            help='Print status information',
-            action='store_true'
             )
 
     parser.add_argument(
@@ -131,91 +46,147 @@ def get_args():
             default=multiprocessing.cpu_count() - 1
             )
 
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    presentation = Tree()
+
+    for file in args.files:
+        presentation.children.append(load_presentation(file))
+
+    dir = tempfile.TemporaryDirectory()
+
+    render_cmds = []
+
+    merge_cmd = ['/usr/bin/gs',
+                 '-dBATCH',
+                 '-dNOPAUSE',
+                 '-q',
+                 '-sDEVICE=pdfwrite',
+                 '-sOutputFile=' + args.output]
+
+    count = 0
+    spinner = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+    # Split the slides, compute the commands to render the slides
+    while next(presentation):
+        svg = dir.name + "/" + str(count) + ".svg"
+        pdf = dir.name + "/" + str(count) + ".pdf"
+        merge_cmd.append(pdf)
+        presentation.children[presentation.index].tree.write(svg)
+        render_cmds.append(["/usr/bin/inkscape",
+                            "-o", pdf,
+                            svg])
+
+        count = (count + 1) % 10
+        print("\r{} Splitting slides".format(spinner[count]), end="")
+    print("\r✓ Splitting slides")
+
+    procs = [None] * args.threads
+ 
+    # Run each of the render commands previously computed
+    while procs:
+        run(procs, render_cmds)
+        count = (count + 1) % 10
+        print("\r{} Rendering Pdfs".format(spinner[count]), end="")
+        time.sleep(0.03)
+    print("\r✓ Rendering Pdfs")
+
+    # Merge each of the pdfs into one pdf
+    merge = subprocess.Popen(merge_cmd)
+    while merge.poll() is None:
+        count = (count + 1) % 10
+        print("\r{} Merging slides".format(spinner[count]), end="")
+        time.sleep(0.03)
+    print("\r✓ Merging slides")
+
+
+def inkscape(name):
+    """ Add the inkscape namespace to a name """
+    return '{http://www.inkscape.org/namespaces/inkscape}' + name
+
+
+def run(procs, cmds):
+    """ Budget worker pool """
+    if not cmds:
+        for i, proc in enumerate(procs):
+            if proc is None or proc.poll() is not None:
+                _ = procs.pop(i)
+                return
+        return
+
+    for i, proc in enumerate(procs):
+        if proc is None or proc.poll() is not None:
+            procs[i] = subprocess.Popen(cmds.pop(), stderr=subprocess.DEVNULL)
+            break
+
+
+class Tree:
+    def __init__(self, element=None):
+        self.children = []
+        self.element = element
+        self.index = None
+
+
+def next(tree):
+    """ Move to the next slide """
+    if tree.index is None:
+        # Initial setup
+        tree.index = 0
+
+        if tree.element is not None:
+            tree.element.set('style', 'display:inline')
+
+        if tree.children:
+            next(tree.children[0])
+
+        return True
+
+    try:
+        if not next(tree.children[tree.index]):
+            tree.index += 1
+            next(tree.children[tree.index])
+
+    except IndexError:
+        # If at any point we run out of children there is no next element
+        if tree.element:
+            tree.element.set('style', 'display:none')
+        return False
+
+    return True
+
+
+def layer(element):
+    if element.get(inkscape('groupmode')) != 'layer':
+        return None
+
+    label = element.get(inkscape('label'))
+
+    if label[0] == '(' and label[-1] == ')':
+        return None
+
+    element.set('style', 'display:none')
+    tree = Tree(element)
+
+    for child in element:
+        maybe_tree = layer(child)
+        if maybe_tree:
+            tree.children.append(maybe_tree)
+
+    return tree
 
 
 def load_presentation(file):
     """ Load a presentation from an svg file on disk """
     tree = xml.etree.ElementTree.parse(file)
     root = tree.getroot()
-    return Slides(root, tree)
+    slides = Tree()
+    slides.tree = tree
+    for child in root:
+        maybe_slides = layer(child)
+        if maybe_slides is not None:
+            slides.children.append(maybe_slides)
 
-
-def main():
-    args = get_args()
-    presentation = Slides(None)
-
-    for file in args.files:
-        presentation.children.append(load_presentation(file))
-
-    count = 0
-    total = len(presentation)
-    pdfs = []
-    cmds = []
-
-    dir = tempfile.TemporaryDirectory()
-
-    while presentation.next():
-        svg = dir.name + "/" + str(count) + ".svg"
-        pdf = dir.name + "/" + str(count) + ".pdf"
-        pdfs.append(pdf)
-        presentation.write(svg)
-        cmds.append(["/usr/bin/inkscape",
-                     "-o", pdf,
-                     svg])
-        count += 1
-        if args.verbose:
-            print("\rSplitting slides: {}/{}".format(count, total), end="")
-
-    if args.verbose:
-        print("")
-
-    procs = []
-    count = 0
-    while cmds:
-        if len(procs) <= args.threads:
-            procs.append(subprocess.Popen(cmds.pop()))
-            continue
-
-        for num, proc in enumerate(procs):
-            if proc.poll() is not None:
-                procs[num] = subprocess.Popen(cmds.pop())
-                count += 1
-
-                if args.verbose:
-                    print(
-                        "\rRendering Pdfs: {}/{}".format(count, total),
-                        end=""
-                        )
-
-                break
-
-    for proc in procs:
-        proc.wait()
-        count += 1
-
-        if args.verbose:
-            print("\rRendering Pdfs: {}/{}".format(count, total), end="")
-
-    if args.verbose:
-        print("\nMerging slides... ", end="")
-
-    cmd = ['/usr/bin/gs',
-           '-dBATCH',
-           '-dNOPAUSE',
-           '-q',
-           '-sDEVICE=pdfwrite',
-           '-sOutputFile=' + args.output]
-
-    for pdf in pdfs:
-        cmd.append(pdf)
-
-    subprocess.run(cmd)
-
-    if args.verbose:
-        print("done!")
-
-    dir.cleanup()
+    return slides
 
 
 if __name__ == '__main__':

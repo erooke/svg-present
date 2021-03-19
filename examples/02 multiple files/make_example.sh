@@ -1,3 +1,3 @@
 #! /bin/sh
 
-../../mk_pdf -v -o talk.pdf intro.svg section1.svg
+../../mk_pdf -o talk.pdf intro.svg section1.svg
