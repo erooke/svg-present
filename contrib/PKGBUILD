@@ -1,0 +1,39 @@
+# Maintainer: Ethan Rooke <ethan@roo.ke>
+pkgname=svg-present-git
+_pkgname=svg-present
+pkgver=r6.ee3ce2d
+pkgrel=1
+epoch=
+pkgdesc="Turn svgs into pdf slides"
+arch=('x86_64')
+url="https://github.com/erooke/Svg-Preset"
+license=('MIT')
+groups=()
+depends=("ghostscript"
+  "python"
+  "inkscape"
+  )
+makedepends=(git)
+checkdepends=()
+optdepends=()
+provides=(mk_pdf)
+conflicts=()
+replaces=()
+backup=()
+options=()
+install=
+changelog=
+source=('svg-present::git+ssh://git@github.com/erooke/svg-present.git')
+noextract=()
+md5sums=('SKIP')
+validpgpkeys=()
+
+pkgver(){
+  cd "$srcdir/$_pkgname"
+	printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+package() {
+  cd "$srcdir/$_pkgname"
+	make DESTDIR="$pkgdir/" install
+}
