@@ -1,4 +1,7 @@
-#! /bin/python
+#! /usr/bin/env python
+import os
+from typing import Iterator
+from pathlib import Path
 from argparse import ArgumentParser
 from multiprocessing import Pool
 from subprocess import run, DEVNULL
@@ -16,50 +19,52 @@ def main():
         3. Combine each pdf into one master pdf
     """
     parser = ArgumentParser(
-            description='A python script to create slides using inkscape'
-            )
+        description="A python script to create slides using inkscape"
+    )
+
+    parser.add_argument("files", metavar="file", nargs="+", help="Inkscape file to use")
 
     parser.add_argument(
-            'files',
-            metavar='file',
-            nargs='+',
-            help='Inkscape file to use'
-            )
+        "-o",
+        "--output",
+        metavar="file",
+        help="Output for the slideshow",
+        nargs="?",
+        default="talk.pdf",
+    )
 
     parser.add_argument(
-            '-o',
-            '--output',
-            metavar='file',
-            help='Output for the slideshow',
-            nargs='?',
-            default='talk.pdf'
-            )
-
-    parser.add_argument(
-            '-j',
-            '--threads',
-            metavar='num',
-            help='How many inkscape processess to spawn',
-            nargs='?',
-            type=int,
-            default=None
-            )
+        "-j",
+        "--threads",
+        metavar="num",
+        help="How many inkscape processess to spawn",
+        nargs="?",
+        type=int,
+        default=None,
+    )
 
     args = parser.parse_args()
 
     presentation = Tree()
 
     for file in args.files:
-        presentation.children.append(load_presentation(file))
+        try:
+            sub_presentation = load_presentation(file)
+            presentation.children.append(sub_presentation)
+        except IsADirectoryError:
+            for svg in find_svgs(file):
+                presentation.children.append(load_presentation(svg))
 
     dir = TemporaryDirectory()
 
-    merge_cmd = ['/usr/bin/gs',
-                 '-dBATCH',
-                 '-dNOPAUSE',
-                 '-q',
-                 '-sDEVICE=pdfwrite',
-                 '-sOutputFile=' + args.output]
+    merge_cmd = [
+        "/usr/bin/gs",
+        "-dBATCH",
+        "-dNOPAUSE",
+        "-q",
+        "-sDEVICE=pdfwrite",
+        "-sOutputFile=" + args.output,
+    ]
 
     count = 0
 
@@ -73,10 +78,8 @@ def main():
         merge_cmd.append(pdf)
         presentation.children[presentation.index].tree.write(svg)
         pool.apply_async(
-                run,
-                (["/usr/bin/inkscape", "-o", pdf, svg],),
-                dict(stderr=DEVNULL)
-                )
+            run, (["/usr/bin/inkscape", "-o", pdf, svg],), dict(stderr=DEVNULL)
+        )
         count += 1
     print("\r✓ Splitting Slides")
 
@@ -92,8 +95,8 @@ def main():
 
 
 def inkscape(name):
-    """ Add the inkscape namespace to a name """
-    return '{http://www.inkscape.org/namespaces/inkscape}' + name
+    """Add the inkscape namespace to a name"""
+    return "{http://www.inkscape.org/namespaces/inkscape}" + name
 
 
 class Tree:
@@ -104,13 +107,13 @@ class Tree:
 
 
 def next(tree):
-    """ Move to the next slide """
+    """Move to the next slide"""
     if tree.index is None:
         # Initial setup
         tree.index = 0
 
         if tree.element is not None:
-            tree.element.set('style', 'display:inline')
+            tree.element.set("style", "display:inline")
 
         if tree.children:
             next(tree.children[0])
@@ -125,22 +128,22 @@ def next(tree):
     except IndexError:
         # If at any point we run out of children there is no next element
         if tree.element:
-            tree.element.set('style', 'display:none')
+            tree.element.set("style", "display:none")
         return False
 
     return True
 
 
 def layer(element):
-    if element.get(inkscape('groupmode')) != 'layer':
+    if element.get(inkscape("groupmode")) != "layer":
         return None
 
-    label = element.get(inkscape('label'))
+    label = element.get(inkscape("label"))
 
-    if label[0] == '(' and label[-1] == ')':
+    if label[0] == "(" and label[-1] == ")":
         return None
 
-    element.set('style', 'display:none')
+    element.set("style", "display:none")
     tree = Tree(element)
 
     for child in element:
@@ -152,7 +155,7 @@ def layer(element):
 
 
 def load_presentation(file):
-    """ Load a presentation from an svg file on disk """
+    """Load a presentation from an svg file on disk"""
     tree = ElementTree.parse(file)
     root = tree.getroot()
     slides = Tree()
@@ -165,5 +168,16 @@ def load_presentation(file):
     return slides
 
 
-if __name__ == '__main__':
+def find_svgs(directory: str) -> Iterator[Path]:
+    for dirname, dirs, files in os.walk(directory):
+        # This ensures the directories are traveresed in a sensible order
+        dirs.sort()
+        files.sort()
+        for file in files:
+            if not file.endswith(".svg"):
+                continue
+            yield Path(dirname) / file
+
+
+if __name__ == "__main__":
     main()
