@@ -1,15 +1,15 @@
 #! /usr/bin/env python
 import os
-from typing import Iterator
-from pathlib import Path
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 from multiprocessing import Pool
-from subprocess import run, DEVNULL
+from pathlib import Path
+from subprocess import DEVNULL, run
 from tempfile import TemporaryDirectory
+from typing import Iterator
 from xml.etree import ElementTree
 
 
-def main():
+def main() -> None:
     """
     Renders a pdf slideshow from a single svg.
     This process happens in three steps:
@@ -18,6 +18,53 @@ def main():
         2. Use inkscape to render each of these svgs to pdfs
         3. Combine each pdf into one master pdf
     """
+    presentation = Tree()
+
+    args = parse_args()
+
+    for file in find_svgs(args.files):
+        sub_presentation = load_presentation(file)
+        presentation.children.append(sub_presentation)
+
+    merge_cmd = [
+        "gs",
+        "-dBATCH",
+        "-dNOPAUSE",
+        "-q",
+        "-sDEVICE=pdfwrite",
+        "-sOutputFile=" + args.output,
+    ]
+
+    count = 0
+
+    pool = Pool(args.threads)
+
+    # Split the slides, start the rendering pool
+    print("\r  Splitting Slides", end="")
+    with TemporaryDirectory() as dir_name:
+        directory = Path(dir_name)
+        while next(presentation):
+            svg = directory / (str(count) + ".svg")
+            pdf = directory / (str(count) + ".pdf")
+            merge_cmd.append(pdf)
+            presentation.children[presentation.index].tree.write(svg)
+            pool.apply_async(run, (["inkscape", "-o", pdf, svg],), dict(stderr=DEVNULL))
+            count += 1
+        print("\r✓ Splitting Slides")
+
+        print("  Rendering Slides", end="")
+        pool.close()
+        pool.join()
+        print("\r✓ Rendering Slides")
+
+        # Merge each of the pdfs into one pdf
+        print("  Merging slides", end="")
+        run(merge_cmd)
+        print("\r✓ Merging slides")
+
+
+def parse_args() -> Namespace:
+
     parser = ArgumentParser(
         description="A python script to create slides using inkscape"
     )
@@ -43,70 +90,23 @@ def main():
         default=None,
     )
 
-    args = parser.parse_args()
-
-    presentation = Tree()
-
-    for file in args.files:
-        try:
-            sub_presentation = load_presentation(file)
-            presentation.children.append(sub_presentation)
-        except IsADirectoryError:
-            for svg in find_svgs(file):
-                presentation.children.append(load_presentation(svg))
-
-    dir = TemporaryDirectory()
-
-    merge_cmd = [
-        "/usr/bin/gs",
-        "-dBATCH",
-        "-dNOPAUSE",
-        "-q",
-        "-sDEVICE=pdfwrite",
-        "-sOutputFile=" + args.output,
-    ]
-
-    count = 0
-
-    pool = Pool(args.threads)
-
-    # Split the slides, start the rendering pool
-    print("\r  Splitting Slides", end="")
-    while next(presentation):
-        svg = dir.name + "/" + str(count) + ".svg"
-        pdf = dir.name + "/" + str(count) + ".pdf"
-        merge_cmd.append(pdf)
-        presentation.children[presentation.index].tree.write(svg)
-        pool.apply_async(
-            run, (["/usr/bin/inkscape", "-o", pdf, svg],), dict(stderr=DEVNULL)
-        )
-        count += 1
-    print("\r✓ Splitting Slides")
-
-    print("  Rendering Slides", end="")
-    pool.close()
-    pool.join()
-    print("\r✓ Rendering Slides")
-
-    # Merge each of the pdfs into one pdf
-    print("  Merging slides", end="")
-    run(merge_cmd)
-    print("\r✓ Merging slides")
+    return parser.parse_args()
 
 
-def inkscape(name):
+def inkscape(name: str) -> str:
     """Add the inkscape namespace to a name"""
     return "{http://www.inkscape.org/namespaces/inkscape}" + name
 
 
 class Tree:
-    def __init__(self, element=None):
+    def __init__(self, element=None) -> None:
         self.children = []
         self.element = element
-        self.index = None
+        self.tree: ElementTree.ElementTree | None = None
+        self.index: int | None = None
 
 
-def next(tree):
+def next(tree: Tree) -> bool:
     """Move to the next slide"""
     if tree.index is None:
         # Initial setup
@@ -134,11 +134,14 @@ def next(tree):
     return True
 
 
-def layer(element):
+def layer(element: ElementTree.Element) -> Tree | None:
     if element.get(inkscape("groupmode")) != "layer":
         return None
 
     label = element.get(inkscape("label"))
+
+    if label is None:
+        return None
 
     if label[0] == "(" and label[-1] == ")":
         return None
@@ -147,36 +150,39 @@ def layer(element):
     tree = Tree(element)
 
     for child in element:
-        maybe_tree = layer(child)
-        if maybe_tree:
-            tree.children.append(maybe_tree)
+        if subtree := layer(child):
+            tree.children.append(subtree)
 
     return tree
 
 
-def load_presentation(file):
+def load_presentation(file: Path) -> Tree:
     """Load a presentation from an svg file on disk"""
     tree = ElementTree.parse(file)
     root = tree.getroot()
     slides = Tree()
     slides.tree = tree
     for child in root:
-        maybe_slides = layer(child)
-        if maybe_slides is not None:
-            slides.children.append(maybe_slides)
+        if sub_slides := layer(child):
+            slides.children.append(sub_slides)
 
     return slides
 
 
-def find_svgs(directory: str) -> Iterator[Path]:
-    for dirname, dirs, files in os.walk(directory):
-        # This ensures the directories are traveresed in a sensible order
-        dirs.sort()
-        files.sort()
-        for file in files:
-            if not file.endswith(".svg"):
-                continue
-            yield Path(dirname) / file
+def find_svgs(names: list[str]) -> Iterator[Path]:
+    for path in map(Path, names):
+        if path.is_file():
+            yield path
+            continue
+
+        for directory, dirs, files in os.walk(path):
+            # This ensures the directories are traveresed in a sensible order
+            dirs.sort()
+            files.sort()
+            for file in files:
+                if not file.endswith(".svg"):
+                    continue
+                yield Path(directory) / file
 
 
 if __name__ == "__main__":
