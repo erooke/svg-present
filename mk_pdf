@@ -35,21 +35,21 @@ def main() -> None:
         "-sOutputFile=" + args.output,
     ]
 
-    count = 0
-
     pool = Pool(args.threads)
 
     # Split the slides, start the rendering pool
     print("\r  Splitting Slides", end="")
+
     with TemporaryDirectory() as dir_name:
         directory = Path(dir_name)
-        while next(presentation):
+
+        for count, _ in enumerate(presentation):
             svg = directory / (str(count) + ".svg")
             pdf = directory / (str(count) + ".pdf")
             merge_cmd.append(pdf)
-            presentation.children[presentation.index].tree.write(svg)
+            presentation.write(svg)
             pool.apply_async(run, (["inkscape", "-o", pdf, svg],), dict(stderr=DEVNULL))
-            count += 1
+
         print("\r✓ Splitting Slides")
 
         print("  Rendering Slides", end="")
@@ -99,39 +99,42 @@ def inkscape(name: str) -> str:
 
 
 class Tree:
-    def __init__(self, element=None) -> None:
-        self.children = []
-        self.element = element
+    def __init__(self, element: ElementTree.Element = None) -> None:
+        self.children: list[Tree] = []
+        self.element: ElementTree.Element | None = element
         self.tree: ElementTree.ElementTree | None = None
-        self.index: int | None = None
+        self._visible: bool = False
 
+    def write(self, path: Path) -> None:
+        for child in self.children:
+            if child.visible and child.tree:
+                child.tree.write(path)
+                return
 
-def next(tree: Tree) -> bool:
-    """Move to the next slide"""
-    if tree.index is None:
-        # Initial setup
-        tree.index = 0
+    @property
+    def visible(self):
+        return self._visible
 
-        if tree.element is not None:
-            tree.element.set("style", "display:inline")
+    @visible.setter
+    def visible(self, value: bool) -> None:
+        self._visible = value
 
-        if tree.children:
-            next(tree.children[0])
+        if self.element:
+            if value:
+                self.element.set("style", "display:inline")
+            else:
+                self.element.set("style", "display:none")
 
-        return True
+    def __iter__(self):
+        self.visible = True
 
-    try:
-        if not next(tree.children[tree.index]):
-            tree.index += 1
-            next(tree.children[tree.index])
+        if not self.children:
+            yield self
 
-    except IndexError:
-        # If at any point we run out of children there is no next element
-        if tree.element:
-            tree.element.set("style", "display:none")
-        return False
+        for child in self.children:
+            yield from child
 
-    return True
+        self.visible = False
 
 
 def layer(element: ElementTree.Element) -> Tree | None:
@@ -146,8 +149,8 @@ def layer(element: ElementTree.Element) -> Tree | None:
     if label[0] == "(" and label[-1] == ")":
         return None
 
-    element.set("style", "display:none")
     tree = Tree(element)
+    tree.visible = False
 
     for child in element:
         if subtree := layer(child):
