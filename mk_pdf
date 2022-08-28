@@ -163,6 +163,10 @@ def load_presentation(file: Path) -> Tree:
     """Load a presentation from an svg file on disk"""
     tree = ElementTree.parse(file)
     root = tree.getroot()
+    root.remove(
+        root.findall(".{http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd}*")[0]
+    )
+    root.remove(root.findall(".{http://www.w3.org/2000/svg}metadata")[0])
     slides = Tree()
     slides.tree = tree
     for child in root:
