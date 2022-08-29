@@ -5,7 +5,6 @@ from argparse import ArgumentParser, Namespace
 from multiprocessing import Pool
 from pathlib import Path
 from subprocess import DEVNULL, run
-from tempfile import TemporaryDirectory
 from typing import Iterator
 from xml.etree import ElementTree
 
