@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+import copy
 import os
 from argparse import ArgumentParser, Namespace
 from multiprocessing import Pool
@@ -108,7 +109,14 @@ class Tree:
     def write(self, path: Path) -> None:
         for child in self.children:
             if child.visible and child.tree:
-                child.tree.write(path)
+                tree = copy.deepcopy(child.tree)
+                root = tree.getroot()
+
+                for parent in root.findall(".//*[@style='display:none'].."):
+                    for node in parent.findall(".*[@style='display:none']"):
+                        parent.remove(node)
+
+                tree.write(path)
                 return
 
     @property
