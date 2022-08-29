@@ -1,4 +1,5 @@
 #! /usr/bin/env python
+import copy
 import os
 from argparse import ArgumentParser, Namespace
 from multiprocessing import Pool
@@ -40,27 +41,29 @@ def main() -> None:
     # Split the slides, start the rendering pool
     print("\r  Splitting Slides", end="")
 
-    with TemporaryDirectory() as dir_name:
-        directory = Path(dir_name)
+    os.makedirs(args.cache, exist_ok=True)
+    directory = Path(args.cache)
 
-        for count, _ in enumerate(presentation):
-            svg = directory / (str(count) + ".svg")
-            pdf = directory / (str(count) + ".pdf")
-            merge_cmd.append(pdf)
-            presentation.write(svg)
+    for count, _ in enumerate(presentation):
+        svg = directory / (str(count) + ".svg")
+        pdf = directory / (str(count) + ".pdf")
+        merge_cmd.append(pdf)
+        change = presentation.write(svg)
+
+        if change:
             pool.apply_async(run, (["inkscape", "-o", pdf, svg],), dict(stderr=DEVNULL))
 
-        print("\r✓ Splitting Slides")
+    print("\r✓ Splitting Slides")
 
-        print("  Rendering Slides", end="")
-        pool.close()
-        pool.join()
-        print("\r✓ Rendering Slides")
+    print("  Rendering Slides", end="")
+    pool.close()
+    pool.join()
+    print("\r✓ Rendering Slides")
 
-        # Merge each of the pdfs into one pdf
-        print("  Merging slides", end="")
-        run(merge_cmd)
-        print("\r✓ Merging slides")
+    # Merge each of the pdfs into one pdf
+    print("  Merging slides", end="")
+    run(merge_cmd)
+    print("\r✓ Merging slides")
 
 
 def parse_args() -> Namespace:
@@ -90,6 +93,15 @@ def parse_args() -> Namespace:
         default=None,
     )
 
+    parser.add_argument(
+        "--cache",
+        help="Where to cache files",
+        nargs="?",
+        type=str,
+        metavar="dir",
+        default="talk_cache",
+    )
+
     return parser.parse_args()
 
 
@@ -105,11 +117,29 @@ class Tree:
         self.tree: ElementTree.ElementTree | None = None
         self._visible: bool = False
 
-    def write(self, path: Path) -> None:
+    def write(self, path: Path) -> bool:
         for child in self.children:
             if child.visible and child.tree:
-                child.tree.write(path)
-                return
+                tree = copy.deepcopy(child.tree)
+                root = tree.getroot()
+
+                for parent in root.findall(".//*[@style='display:none'].."):
+                    for node in parent.findall(".*[@style='display:none']"):
+                        parent.remove(node)
+
+                if path.exists():
+                    old = ElementTree.parse(path).getroot()
+
+                    # This should be good enough for us.
+                    # If this is true they are definetly the same etree, it may
+                    # miss some equivalent trees
+                    if ElementTree.tostring(old) == ElementTree.tostring(root):
+                        return False
+
+                tree.write(path)
+                return True
+
+        return False
 
     @property
     def visible(self):
@@ -163,6 +193,10 @@ def load_presentation(file: Path) -> Tree:
     """Load a presentation from an svg file on disk"""
     tree = ElementTree.parse(file)
     root = tree.getroot()
+    root.remove(
+        root.findall(".{http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd}*")[0]
+    )
+    root.remove(root.findall(".{http://www.w3.org/2000/svg}metadata")[0])
     slides = Tree()
     slides.tree = tree
     for child in root:
@@ -183,9 +217,8 @@ def find_svgs(names: list[str]) -> Iterator[Path]:
             dirs.sort()
             files.sort()
             for file in files:
-                if not file.endswith(".svg"):
-                    continue
-                yield Path(directory) / file
+                if file.endswith(".svg"):
+                    yield Path(directory) / file
 
 
 if __name__ == "__main__":
