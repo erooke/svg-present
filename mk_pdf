@@ -183,9 +183,8 @@ def find_svgs(names: list[str]) -> Iterator[Path]:
             dirs.sort()
             files.sort()
             for file in files:
-                if not file.endswith(".svg"):
-                    continue
-                yield Path(directory) / file
+                if file.endswith(".svg"):
+                    yield Path(directory) / file
 
 
 if __name__ == "__main__":
