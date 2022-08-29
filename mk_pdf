@@ -41,8 +41,8 @@ def main() -> None:
     # Split the slides, start the rendering pool
     print("\r  Splitting Slides", end="")
 
-    dir_name = "test"
-    directory = Path(dir_name)
+    os.makedirs(args.cache, exist_ok=True)
+    directory = Path(args.cache)
 
     for count, _ in enumerate(presentation):
         svg = directory / (str(count) + ".svg")
@@ -91,6 +91,15 @@ def parse_args() -> Namespace:
         nargs="?",
         type=int,
         default=None,
+    )
+
+    parser.add_argument(
+        "--cache",
+        help="Where to cache files",
+        nargs="?",
+        type=str,
+        metavar="dir",
+        default="talk_cache",
     )
 
     return parser.parse_args()
