@@ -41,27 +41,29 @@ def main() -> None:
     # Split the slides, start the rendering pool
     print("\r  Splitting Slides", end="")
 
-    with TemporaryDirectory() as dir_name:
-        directory = Path(dir_name)
+    dir_name = "test"
+    directory = Path(dir_name)
 
-        for count, _ in enumerate(presentation):
-            svg = directory / (str(count) + ".svg")
-            pdf = directory / (str(count) + ".pdf")
-            merge_cmd.append(pdf)
-            presentation.write(svg)
+    for count, _ in enumerate(presentation):
+        svg = directory / (str(count) + ".svg")
+        pdf = directory / (str(count) + ".pdf")
+        merge_cmd.append(pdf)
+        change = presentation.write(svg)
+
+        if change:
             pool.apply_async(run, (["inkscape", "-o", pdf, svg],), dict(stderr=DEVNULL))
 
-        print("\r✓ Splitting Slides")
+    print("\r✓ Splitting Slides")
 
-        print("  Rendering Slides", end="")
-        pool.close()
-        pool.join()
-        print("\r✓ Rendering Slides")
+    print("  Rendering Slides", end="")
+    pool.close()
+    pool.join()
+    print("\r✓ Rendering Slides")
 
-        # Merge each of the pdfs into one pdf
-        print("  Merging slides", end="")
-        run(merge_cmd)
-        print("\r✓ Merging slides")
+    # Merge each of the pdfs into one pdf
+    print("  Merging slides", end="")
+    run(merge_cmd)
+    print("\r✓ Merging slides")
 
 
 def parse_args() -> Namespace:
@@ -106,7 +108,7 @@ class Tree:
         self.tree: ElementTree.ElementTree | None = None
         self._visible: bool = False
 
-    def write(self, path: Path) -> None:
+    def write(self, path: Path) -> bool:
         for child in self.children:
             if child.visible and child.tree:
                 tree = copy.deepcopy(child.tree)
@@ -116,8 +118,19 @@ class Tree:
                     for node in parent.findall(".*[@style='display:none']"):
                         parent.remove(node)
 
+                if path.exists():
+                    old = ElementTree.parse(path).getroot()
+
+                    # This should be good enough for us.
+                    # If this is true they are definetly the same etree, it may
+                    # miss some equivalent trees
+                    if ElementTree.tostring(old) == ElementTree.tostring(root):
+                        return False
+
                 tree.write(path)
-                return
+                return True
+
+        return False
 
     @property
     def visible(self):
