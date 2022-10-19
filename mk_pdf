@@ -234,8 +234,8 @@ def load_presentation(file: Path) -> Tree:
         try:
             new_node.attrib["transform"] = x.attrib["transform"]
         except KeyError:
-            # TODO figure out what's throwing this, it does not seem to matter.
-            pass
+            translate = "translate({},{})".format(x.attrib["x"], x.attrib["y"])
+            new_node.attrib["transform"] = translate
 
         parent.insert(index, new_node)
 
