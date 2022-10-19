@@ -191,6 +191,7 @@ def layer(element: ElementTree.Element) -> Tree | None:
 def load_presentation(file: Path) -> Tree:
     """Load a presentation from an svg file on disk"""
     tree = ElementTree.parse(file)
+    ElementTree.register_namespace("svg","http://www.w3.org/2000/svg")
     root = tree.getroot()
     try:
         root.remove(
@@ -203,6 +204,41 @@ def load_presentation(file: Path) -> Tree:
         root.remove(root.findall(".{http://www.w3.org/2000/svg}metadata")[0])
     except IndexError:
         pass
+
+    ns = { "xlink": "http://www.w3.org/1999/xlink" ,
+          "svg": "http://www.w3.org/2000/svg"
+          }
+
+    for prefix, uri in ns.items():
+        ElementTree.register_namespace(prefix, uri)
+
+    # Record all the parents of our tree
+    parent_map = {c:p for p in tree.iter() for c in p}
+
+    for x in root.findall(".//svg:use", ns):
+        # Get what we're linked to
+        xlink = ns["xlink"]
+        href = x.attrib[f"{{{xlink}}}href"]
+        link_target = root.find(f".//*[@id='{href[1:]}']")
+        assert link_target is not None
+
+        # Find our parent
+        parent = parent_map[x]
+        index = parent[0:].index(x)
+
+        parent.remove(x)
+
+        # Undo the link by copying it, and transforming it where it needs to go
+        new_node = copy.deepcopy(link_target)
+
+        try:
+            new_node.attrib["transform"] = x.attrib["transform"]
+        except KeyError:
+            # TODO figure out what's throwing this, it does not seem to matter.
+            pass
+
+        parent.insert(index, new_node)
+
 
     slides = Tree()
     slides.tree = tree
