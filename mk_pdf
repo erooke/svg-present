@@ -7,6 +7,7 @@ from pathlib import Path
 from subprocess import DEVNULL, run
 from typing import Iterator
 from xml.etree import ElementTree
+import logging
 
 
 def main() -> None:
@@ -22,7 +23,11 @@ def main() -> None:
 
     args = parse_args()
 
+    level = logging.INFO if args.verbose else logging.WARNING
+    logging.basicConfig(level=level, format="%(levelname)s\t%(message)s")
+
     for file in find_svgs(args.files):
+        logging.info(f"loading {file}")
         sub_presentation = load_presentation(file)
         presentation.children.append(sub_presentation)
 
@@ -99,6 +104,10 @@ def parse_args() -> Namespace:
         type=str,
         metavar="dir",
         default="talk_cache",
+    )
+
+    parser.add_argument(
+        "-v", "--verbose", help="Print debug information", action="store_true"
     )
 
     return parser.parse_args()
