@@ -73,6 +73,7 @@ def main() -> None:
 def parse_args() -> Namespace:
 
     parser = ArgumentParser(
+        prog = "mk_pdf",
         description="A python script to create slides using inkscape"
     )
 
