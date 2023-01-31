@@ -1,5 +1,6 @@
 #! /usr/bin/env python
 import copy
+import logging
 import os
 from argparse import ArgumentParser, Namespace
 from multiprocessing import Pool
@@ -7,7 +8,6 @@ from pathlib import Path
 from subprocess import DEVNULL, run
 from typing import Iterator
 from xml.etree import ElementTree
-import logging
 
 
 def main() -> None:
@@ -73,8 +73,8 @@ def main() -> None:
 def parse_args() -> Namespace:
 
     parser = ArgumentParser(
-        prog = "mk_pdf",
-        description="A python script to create slides using inkscape"
+        prog="mk_pdf",
+        description="A python script to create slides using inkscape",
     )
 
     parser.add_argument("files", metavar="file", nargs="+", help="Inkscape file to use")
@@ -120,7 +120,7 @@ def inkscape(name: str) -> str:
 
 
 class Tree:
-    def __init__(self, element: ElementTree.Element = None) -> None:
+    def __init__(self, element: ElementTree.Element | None = None) -> None:
         self.children: list[Tree] = []
         self.element: ElementTree.Element | None = element
         self.tree: ElementTree.ElementTree | None = None

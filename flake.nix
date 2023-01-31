@@ -27,5 +27,8 @@
       program = "${mk_pdf}/bin/mk_pdf";
     };
 
+    devShells.${system}.default = pkgs.mkShell {
+      buildInputs = with pkgs; [ black isort pyright ] ++ deps;
+    };
   };
 }
