@@ -1,6 +1,10 @@
 {
   description = "Bad code to make slides from svg";
 
+  inputs = {
+    nixpkgs.url = "github:nixos/nixos-unstable";
+  };
+
   outputs = { self, nixpkgs }:
   let
     system = "x86_64-linux";
