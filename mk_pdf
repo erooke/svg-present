@@ -228,7 +228,9 @@ def load_presentation(file: Path) -> Tree:
         xlink = ns["xlink"]
         href = x.attrib[f"{{{xlink}}}href"]
         link_target = root.find(f".//*[@id='{href[1:]}']")
-        assert link_target is not None
+
+        if link_target is None:
+            print("There is a dead link in this document")
 
         # Find our parent
         parent = parent_map[x]
