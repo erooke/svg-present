@@ -231,6 +231,7 @@ def load_presentation(file: Path) -> Tree:
 
         if link_target is None:
             print("There is a dead link in this document")
+            continue
 
         # Find our parent
         parent = parent_map[x]
