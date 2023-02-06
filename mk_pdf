@@ -242,18 +242,30 @@ def load_presentation(file: Path) -> Tree:
         # Undo the link by copying it, and transforming it where it needs to go
         new_node = copy.deepcopy(link_target)
 
-        try:
-            new_node.attrib["transform"] = x.attrib["transform"]
-        except KeyError:
-            try:
-                translate = "translate({},{})".format(x.attrib["x"], x.attrib["y"])
-                new_node.attrib["transform"] = translate
-            except KeyError:
-                # TODO I don't think this is a problem
-                # it looks like when you have some nested defs you can get a
-                # group which doesn't have a position? I haven't had time to
-                # confirm that this is fine
-                logging.info("Something weird has happened")
+        transform = [x.attrib.get("transform")]
+
+        if "x" in x.attrib or "y" in x.attrib:
+            x_coord = x.attrib.get("x", 0)
+            y_coord = x.attrib.get("y", 0)
+            transform.append("translate({},{})".format(x_coord, y_coord))
+
+        transform.append(new_node.attrib.get("transform"))
+
+        transform = [t for t in transform if t is not None]
+
+        new_node.attrib["transform"] = " ".join(transform)
+
+        # We need to merge the styles of the use element and the target element
+        # prerference is given to the link target according to mdn
+        # https://developer.mozilla.org/en-US/docs/Web/SVG/Element/use
+        use_css = x.attrib.get("style", "")
+        target_css = link_target.get("style", "")
+
+        use_css = css_to_dict(use_css)
+        target_css = css_to_dict(target_css)
+
+        use_css.update(target_css)
+        new_node.attrib["style"] = dict_to_css(use_css)
 
         parent.insert(index, new_node)
 
@@ -279,6 +291,25 @@ def find_svgs(names: list[str]) -> Iterator[Path]:
         if path.is_dir():
             stack.extend(sorted(list(path.iterdir()), reverse=True))
             continue
+
+
+def css_to_dict(css: str) -> dict[str, str]:
+    if css == "":
+        return dict()
+
+    result = dict()
+    for entry in css.split(";"):
+        key, value = [ part.strip() for part in entry.split(":") ]
+        result[key] = value
+    return result
+
+
+def dict_to_css(d: dict[str, str]) -> str:
+    css = []
+    for key, value in d.items():
+        css.append(f"{key}: {value}")
+
+    return "; ".join(css)
 
 
 if __name__ == "__main__":
