@@ -230,7 +230,7 @@ def load_presentation(file: Path) -> Tree:
         link_target = root.find(f".//*[@id='{href[1:]}']")
 
         if link_target is None:
-            print("There is a dead link in this document")
+            logging.info("There is a dead link in this document")
             continue
 
         # Find our parent
@@ -251,8 +251,9 @@ def load_presentation(file: Path) -> Tree:
             except KeyError:
                 # TODO I don't think this is a problem
                 # it looks like when you have some nested defs you can get a
-                # group which doesn't have a position?
-                print("Something weird has happened")
+                # group which doesn't have a position? I haven't had time to
+                # confirm that this is fine
+                logging.info("Something weird has happened")
 
         parent.insert(index, new_node)
 
