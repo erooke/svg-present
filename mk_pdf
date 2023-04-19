@@ -217,6 +217,9 @@ def load_presentation(file: Path) -> Tree:
 
     ns = {"xlink": "http://www.w3.org/1999/xlink", "svg": "http://www.w3.org/2000/svg"}
 
+    symbol = f"{{{ns['svg']}}}symbol"
+    group = f"{{{ns['svg']}}}g"
+
     for prefix, uri in ns.items():
         ElementTree.register_namespace(prefix, uri)
 
@@ -266,6 +269,13 @@ def load_presentation(file: Path) -> Tree:
 
         use_css.update(target_css)
         new_node.attrib["style"] = dict_to_css(use_css)
+
+        # Symbols only make sense if they're being referenced
+        # if we run into a symbol while dereferencing we need to convert it to a group
+        # https://developer.mozilla.org/en-US/docs/Web/SVG/Element/symbol
+        if new_node.tag == symbol:
+            logging.info(f"Converting element {index} from symbol to group")
+            new_node.tag = group
 
         parent.insert(index, new_node)
 
