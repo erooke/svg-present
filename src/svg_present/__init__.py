@@ -1,12 +1,13 @@
 import copy
 import logging
 import os
-from argparse import ArgumentParser, Namespace
 from multiprocessing import Pool
 from pathlib import Path
 from subprocess import DEVNULL, run
 from typing import Iterator, Literal
 from xml.etree import ElementTree
+
+from .args import parse_args
 
 
 def main() -> None:
@@ -83,48 +84,6 @@ def merge_pdf(cache_dir: Path, out_file: Path):
     run(merge_cmd)
 
 
-def parse_args() -> Namespace:
-    parser = ArgumentParser(
-        prog="mk_pdf",
-        description="A python script to create slides using inkscape",
-    )
-
-    parser.add_argument("files", metavar="file", nargs="+", help="Inkscape file to use")
-
-    parser.add_argument(
-        "-o",
-        "--output",
-        metavar="file",
-        help="Output for the slideshow",
-        nargs="?",
-        type=Path,
-        default="talk.pdf",
-    )
-
-    parser.add_argument(
-        "-j",
-        "--threads",
-        metavar="num",
-        help="How many inkscape processess to spawn",
-        nargs="?",
-        type=int,
-        default=None,
-    )
-
-    parser.add_argument(
-        "--cache",
-        help="Where to cache files",
-        nargs="?",
-        type=Path,
-        metavar="dir",
-        default="talk_cache",
-    )
-
-    parser.add_argument(
-        "-v", "--verbose", help="Print debug information", action="store_true"
-    )
-
-    return parser.parse_args()
 
 
 def inkscape(name: str) -> str:
@@ -301,8 +260,8 @@ def load_presentation(file: Path) -> Tree:
     return slides
 
 
-def find_svgs(names: list[str]) -> Iterator[Path]:
-    stack = list(map(Path, names))
+def find_svgs(names: list[Path]) -> Iterator[Path]:
+    stack = names
 
     while stack:
         path = stack.pop()
