@@ -40,7 +40,7 @@ def main() -> None:
     directory = Path(args.cache)
 
     for count, _ in enumerate(presentation):
-        svg = directory / (str(count) + ".svg")
+        svg = directory / (str(count) + ".ink.svg")
         pdf = directory / (str(count) + ".pdf")
         change = presentation.write(svg)
 
@@ -90,16 +90,26 @@ def merge_pdf(cache_dir: Path, out_file: Path):
 
 
 def merge_html(cache_dir: Path, out_file: Path):
-    with out_file.open("wb") as f:
+    with out_file.open("w") as f:
         for i, file in enumerate(
-            sorted(cache_dir.glob("*.svg"), key=lambda x: int(x.name.split(".")[0]))
+            sorted(cache_dir.glob("*.ink.svg"), key=lambda x: int(x.name.split(".")[0]))
         ):
             tree = ElementTree.parse(file)
             root = tree.getroot()
             root.set("id", f"slide-{i}")
             root.set("width", "100%")
             root.set("height", "100%")
-            tree.write(f)
+
+            temp = cache_dir / "temp.svg"
+            tree.write(temp)
+
+            plain = cache_dir / f"{i}.plain.svg"
+            command = ["inkscape", f"--export-plain-svg={plain}", temp]
+            run(command)
+            with plain.open("r") as g:
+                next(g)
+                for line in g:
+                    f.write(line)
 
 
 def inkscape(name: str) -> str:
