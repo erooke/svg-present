@@ -1,6 +1,7 @@
 from argparse import ArgumentParser
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 
 @dataclass
@@ -10,6 +11,7 @@ class Args:
     cache: Path
     verbose: bool
     files: list[Path]
+    out_format: Literal["html", "pdf"]
 
 
 def parse_args() -> Args:
@@ -53,6 +55,15 @@ def parse_args() -> Args:
         type=Path,
         metavar="dir",
         default="talk_cache",
+    )
+
+    parser.add_argument(
+        "--format",
+        help="output format",
+        default="pdf",
+        metavar="format",
+        dest="out_format",
+        required=False,
     )
 
     parser.add_argument(
