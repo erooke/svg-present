@@ -11,27 +11,28 @@
   }: let
     system = "x86_64-linux";
     pkgs = nixpkgs.legacyPackages.${system};
-    deps = with pkgs; [python310 ghostscript inkscape];
-    mk_pdf = pkgs.stdenv.mkDerivation {
-      name = "svg-present";
+    python = pkgs.python311;
+    pythonPkgs = pkgs.python311Packages;
+    deps = [pkgs.ghostscript pkgs.inkscape];
+
+    svg-present = pythonPkgs.buildPythonPackage {
+      pname = "svg-present";
+      version = "0.1.0";
+      format = "pyproject";
       src = ./.;
-      unpackPhase = "true";
-      buildInputs = [pkgs.makeWrapper] ++ deps;
-      installPhase = ''
-        mkdir -p $out/bin
-        cp $src/mk_pdf $out/bin/mk_pdf
-        wrapProgram $out/bin/mk_pdf \
-          --prefix PATH : ${pkgs.lib.makeBinPath deps}
-      '';
+
+      propagatedBuildInputs = deps;
+
+      buildInputs = [pythonPkgs.hatchling];
     };
   in {
     formatter.${system} = pkgs.alejandra;
 
-    packages.${system}.default = mk_pdf;
+    packages.${system}.default = svg-present;
 
     apps.${system}.default = {
       type = "app";
-      program = "${mk_pdf}/bin/mk_pdf";
+      program = "${svg-present}/bin/mk_pdf";
     };
 
     devShells.${system}.default = pkgs.mkShell {
