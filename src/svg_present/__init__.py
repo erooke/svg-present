@@ -55,13 +55,18 @@ def main() -> None:
     print("\r✓ Rendering Slides")
 
     print("  Merging slides", end="")
-    merge_slides("pdf", args.cache, args.output)
+    merge_slides(args.out_format, args.cache, args.output)
     print("\r✓ Merging slides")
 
 
 def merge_slides(out_format: Literal["pdf", "html"], cache_dir: Path, out_file: Path):
     if out_format == "pdf":
         return merge_pdf(cache_dir, out_file)
+
+    if out_format == "html":
+        return merge_html(cache_dir, out_file)
+
+    raise ValueError(f"unknown {out_format=}")
 
 
 def merge_pdf(cache_dir: Path, out_file: Path):
@@ -84,6 +89,17 @@ def merge_pdf(cache_dir: Path, out_file: Path):
     run(merge_cmd)
 
 
+def merge_html(cache_dir: Path, out_file: Path):
+    with out_file.open("wb") as f:
+        for i, file in enumerate(
+            sorted(cache_dir.glob("*.svg"), key=lambda x: int(x.name.split(".")[0]))
+        ):
+            tree = ElementTree.parse(file)
+            root = tree.getroot()
+            root.set("id", f"slide-{i}")
+            root.set("width", "100%")
+            root.set("height", "100%")
+            tree.write(f)
 
 
 def inkscape(name: str) -> str:
