@@ -1,3 +1,7 @@
+# WIP branch
+
+The history in here is not even remotely close to stable
+
 # Inkscape Presentations
 
 Bad code to produce slides from Inkscape svg files.
