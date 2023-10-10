@@ -6,7 +6,7 @@ from argparse import ArgumentParser, Namespace
 from multiprocessing import Pool
 from pathlib import Path
 from subprocess import DEVNULL, run
-from typing import Iterator
+from typing import Iterator, Literal
 from xml.etree import ElementTree
 
 
@@ -31,15 +31,6 @@ def main() -> None:
         sub_presentation = load_presentation(file)
         presentation.children.append(sub_presentation)
 
-    merge_cmd = [
-        "gs",
-        "-dBATCH",
-        "-dNOPAUSE",
-        "-q",
-        "-sDEVICE=pdfwrite",
-        "-sOutputFile=" + args.output,
-    ]
-
     pool = Pool(args.threads)
 
     # Split the slides, start the rendering pool
@@ -51,7 +42,6 @@ def main() -> None:
     for count, _ in enumerate(presentation):
         svg = directory / (str(count) + ".svg")
         pdf = directory / (str(count) + ".pdf")
-        merge_cmd.append(pdf)
         change = presentation.write(svg)
 
         if change:
@@ -64,10 +54,34 @@ def main() -> None:
     pool.join()
     print("\r✓ Rendering Slides")
 
-    # Merge each of the pdfs into one pdf
     print("  Merging slides", end="")
-    run(merge_cmd)
+    merge_slides("pdf", args.cache, args.output)
     print("\r✓ Merging slides")
+
+
+def merge_slides(out_format: Literal["pdf", "html"], cache_dir: Path, out_file: Path):
+    if out_format == "pdf":
+        return merge_pdf(cache_dir, out_file)
+
+
+def merge_pdf(cache_dir: Path, out_file: Path):
+    merge_cmd = [
+        "gs",
+        "-dBATCH",
+        "-dNOPAUSE",
+        "-q",
+        "-sDEVICE=pdfwrite",
+        "-sOutputFile=" + str(out_file),
+    ] + [
+        str(file)
+        for file in sorted(
+            cache_dir.glob("*.pdf"),
+            key=lambda x: int(
+                x.name.split(".")[0],
+            ),
+        )
+    ]
+    run(merge_cmd)
 
 
 def parse_args() -> Namespace:
@@ -84,6 +98,7 @@ def parse_args() -> Namespace:
         metavar="file",
         help="Output for the slideshow",
         nargs="?",
+        type=Path,
         default="talk.pdf",
     )
 
@@ -101,7 +116,7 @@ def parse_args() -> Namespace:
         "--cache",
         help="Where to cache files",
         nargs="?",
-        type=str,
+        type=Path,
         metavar="dir",
         default="talk_cache",
     )
