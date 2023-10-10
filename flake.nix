@@ -35,7 +35,7 @@
     };
 
     devShells.${system}.default = pkgs.mkShell {
-      buildInputs = with pkgs; [black isort pyright] ++ deps;
+      buildInputs = with pkgs; [black isort rye] ++ deps;
     };
   };
 }

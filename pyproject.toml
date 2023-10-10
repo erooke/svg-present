@@ -1,0 +1,24 @@
+[project]
+name = "svg-present"
+version = "0.1.0"
+description = "Bad code to make slides from svg"
+authors = [
+    { name = "Ethan Rooke", email = "pypi@ethan.roo.ke" }
+]
+dependencies = []
+readme = "README.md"
+requires-python = ">= 3.11"
+
+[project.scripts]
+mk_pdf = "svg_present:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.rye]
+managed = true
+dev-dependencies = []
+
+[tool.hatch.metadata]
+allow-direct-references = true

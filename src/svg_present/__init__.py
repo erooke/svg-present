@@ -71,7 +71,6 @@ def main() -> None:
 
 
 def parse_args() -> Namespace:
-
     parser = ArgumentParser(
         prog="mk_pdf",
         description="A python script to create slides using inkscape",
@@ -309,7 +308,7 @@ def css_to_dict(css: str) -> dict[str, str]:
 
     result = dict()
     for entry in css.split(";"):
-        key, value = [ part.strip() for part in entry.split(":") ]
+        key, value = [part.strip() for part in entry.split(":")]
         result[key] = value
     return result
 

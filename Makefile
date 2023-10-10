@@ -1,7 +1,6 @@
-format:
-	black mk_pdf
-	isort --profile=black mk_pdf
+source := $(shell find src -type f -name "*.py")
 
-install:
-	install -d $(DESTDIR)/usr/bin
-	install mk_pdf $(DESTDIR)/usr/bin/
+.PHONY: format
+format:
+	black $(source)
+	isort --profile=black $(source)
