@@ -49,8 +49,8 @@ def main() -> None:
     directory = Path(args.cache)
 
     for count, _ in enumerate(presentation):
-        svg = directory / (str(count) + ".svg")
-        pdf = directory / (str(count) + ".pdf")
+        svg = directory / f"{count:05d}.svg"
+        pdf = directory / f"{count:05d}.pdf"
         merge_cmd.append(pdf)
         change = presentation.write(svg)
 
