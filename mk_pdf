@@ -54,7 +54,9 @@ def main() -> None:
         merge_cmd.append(pdf)
         change = presentation.write(svg)
 
-        if change:
+        # TODO there is currently a weird bug where if too many inkscapes open
+        # at once some of them just die, not sure whats up.
+        if not pdf.exists() or change:
             pool.apply_async(run, (["inkscape", "-o", pdf, svg],), dict(stderr=DEVNULL))
 
     print("\r✓ Splitting Slides")
