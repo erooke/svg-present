@@ -313,17 +313,13 @@ def css_to_dict(css: str) -> dict[str, str]:
 
     result = dict()
     for entry in css.split(";"):
-        key, value = [ part.strip() for part in entry.split(":") ]
+        key, value = [part.strip() for part in entry.split(":")]
         result[key] = value
     return result
 
 
 def dict_to_css(d: dict[str, str]) -> str:
-    css = []
-    for key, value in d.items():
-        css.append(f"{key}: {value}")
-
-    return "; ".join(css)
+    return "; ".join(f"{key}: {value}" for key, value in d.items())
 
 
 if __name__ == "__main__":
