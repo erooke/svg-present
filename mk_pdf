@@ -68,7 +68,7 @@ def main() -> None:
 
     # Merge each of the pdfs into one pdf
     print("  Merging slides", end="")
-    run(merge_cmd)
+    run(merge_cmd, check=True)
     print("\r✓ Merging slides")
 
 
