@@ -160,11 +160,13 @@ class Tree:
     def visible(self, value: bool) -> None:
         self._visible = value
 
-        if self.element:
-            if value:
-                self.element.set("style", "display:inline")
-            else:
-                self.element.set("style", "display:none")
+        if self.element is None:
+            return
+
+        if value:
+            self.element.set("style", "display:inline")
+        else:
+            self.element.set("style", "display:none")
 
     def __iter__(self):
         self.visible = True
