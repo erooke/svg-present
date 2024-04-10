@@ -1,3 +1,5 @@
+.envrc
+.direnv
 *.pdf
 talk_cache
 result
