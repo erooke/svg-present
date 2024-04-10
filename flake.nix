@@ -11,7 +11,7 @@
   }: let
     system = "x86_64-linux";
     pkgs = nixpkgs.legacyPackages.${system};
-    deps = with pkgs; [python310 ghostscript inkscape];
+    deps = with pkgs; [python312 ghostscript inkscape];
     mk_pdf = pkgs.stdenv.mkDerivation {
       name = "svg-present";
       src = ./.;
